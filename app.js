@@ -11,11 +11,11 @@ async function runCampaign() {
   const appPassword = process.env.APP_PASSWORD;
 
   if (!openRouterKey || !senderEmail || !appPassword) {
-    console.error("❌ Error: API Keys and Email Credentials are missing in GitHub Secrets.");
+    console.error("❌ Error: API Keys and Email Credentials are missing.");
     process.exit(1);
   }
 
-  console.log(`🚀 Starting Campaign for: ${niche} in ${location}`);
+  console.log(`🚀 Starting SMART Campaign for: ${niche} in ${location}`);
 
   const transporter = nodemailer.createTransport({
     service: "gmail",
@@ -28,37 +28,79 @@ async function runCampaign() {
   });
   
   const page = await browser.newPage();
-  
-  // ✅ ANTI-BOT BYPASS: Ab server ko lagega ki yeh normal computer hai
   await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+
+  // ==========================================
+  // STEP 1: Businesses ki Asli Websites dhoondhna
+  // ==========================================
+  const searchQuery = `${niche} in ${location} official website contact`;
+  console.log(`🔍 Searching for local business websites...`);
   
-  const searchQuery = `"${niche}" "${location}" "@gmail.com" OR "@yahoo.com"`;
-  console.log(`🔍 Searching on Bing (Google blocks servers): ${searchQuery}`);
-  
-  // ✅ CHANGED TO BING: Bing jaldi block nahi karta
   await page.goto(`https://www.bing.com/search?q=${encodeURIComponent(searchQuery)}`, { waitUntil: 'domcontentloaded' });
   
-  const pageText = await page.evaluate(() => document.body.innerText);
-  const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
-  const rawEmails = pageText.match(emailRegex) ||[];
-  
-  // Duplicate aur khud ka email hatana
-  let emails = [...new Set(rawEmails)].filter(e => e.toLowerCase() !== senderEmail.toLowerCase());
-  emails = emails.slice(0, maxLeads); 
-  
+  // Faltu directories (JustDial wagera) ko ignore karke sirf asli website nikalna
+  const urls = await page.evaluate(() => {
+    const links = Array.from(document.querySelectorAll('h2 a'));
+    return links.map(a => a.href).filter(href => 
+      href.startsWith('http') && 
+      !href.includes('justdial') && 
+      !href.includes('sulekha') && 
+      !href.includes('indiamart') &&
+      !href.includes('facebook') &&
+      !href.includes('instagram')
+    );
+  });
+
+  console.log(`🌐 Found ${urls.length} target websites. Checking them for emails...`);
+
+  let rawEmails =[];
+
+  // ==========================================
+  // STEP 2: Har website ke andar jaakar Email dhoondhna
+  // ==========================================
+  for (let i = 0; i < urls.length; i++) {
+    if (rawEmails.length >= maxLeads + 2) break; // Agar kaafi leads mil gaye toh ruk jao
+
+    console.log(`➡️ Visiting website: ${urls[i]}`);
+    try {
+      // 15 second ka time denge website load hone ko
+      await page.goto(urls[i], { waitUntil: 'domcontentloaded', timeout: 15000 });
+      const pageText = await page.evaluate(() => document.body.innerText);
+      
+      const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+      const found = pageText.match(emailRegex);
+      
+      if (found) {
+        console.log(`   ✅ Found email on this site!`);
+        rawEmails.push(...found);
+      } else {
+         console.log(`   ❌ No email on this site.`);
+      }
+    } catch (error) {
+      console.log(`   ⚠️ Website could not load (Blocked or Slow). Skipping...`);
+    }
+  }
+
   await browser.close();
 
+  // Duplicate aur apne khud ke email ko hatana
+  let emails =[...new Set(rawEmails)].filter(e => e.toLowerCase() !== senderEmail.toLowerCase());
+  emails = emails.slice(0, maxLeads); 
+
   if (emails.length === 0) {
-    console.log("⚠️ No emails found. Try a different query like 'Hospital in Mumbai'.");
+    console.log("⚠️ No emails found on the websites. Try a different query (e.g. Hospital in Mumbai).");
     process.exit(0);
   }
 
-  console.log(`✅ Found ${emails.length} emails:`, emails);
+  console.log(`🎯 Final List of ${emails.length} Emails to contact:`, emails);
 
+  // ==========================================
+  // STEP 3: AI Email Generation & Sending
+  // ==========================================
   let successfulLeads =[];
 
   for (const leadEmail of emails) {
-    console.log(`🤖 Generating AI email for: ${leadEmail}`);
+    console.log(`🤖 AI is writing email for: ${leadEmail}`);
     
     try {
       const aiResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -72,7 +114,7 @@ async function runCampaign() {
           "messages":[
             {
               "role": "user",
-              "content": `Write a very short, professional cold email to a ${niche} business in ${location}. Offer a free 15-min digital marketing consultation. Don't include subject line in body. Maximum 3 sentences.`
+              "content": `Write a very short, professional cold email to a ${niche} business in ${location}. Offer a free 15-min digital marketing consultation. Do not include subject line in body. Maximum 3 sentences.`
             }
           ]
         })
@@ -97,8 +139,8 @@ async function runCampaign() {
   }
 
   if (successfulLeads.length > 0) {
-      console.log("📊 Sending Summary Report to you...");
-      const summaryText = `Hello,\n\nYour GitHub Action Lead Gen tool just finished a campaign.\n\nTarget: ${niche} in ${location}\nTotal Emails Sent: ${successfulLeads.length}\n\nList of Leads Contacted:\n${successfulLeads.join("\n")}\n\nAwesome work!`;
+      console.log("📊 Sending Final Summary Report to you...");
+      const summaryText = `Hello,\n\nYour Smart Lead Gen tool just finished a campaign.\n\nTarget: ${niche} in ${location}\nTotal Emails Sent: ${successfulLeads.length}\n\nList of Leads Contacted:\n${successfulLeads.join("\n")}\n\nAwesome work!`;
 
       await transporter.sendMail({
         from: senderEmail,
