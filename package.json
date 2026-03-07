@@ -1,0 +1,10 @@
+{
+  "name": "github-actions-lead-gen",
+  "version": "1.0.0",
+  "description": "AI Lead Gen using GitHub Actions",
+  "main": "app.js",
+  "dependencies": {
+    "puppeteer": "^22.0.0",
+    "nodemailer": "^6.9.0"
+  }
+}
