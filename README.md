@@ -13,6 +13,6 @@ Step 3: Open folder
 
 cd ai-web-builder
 
-Step 4: Run installer
+Steps 4: Run installer
 
 bash install.sh
