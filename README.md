@@ -11,7 +11,7 @@ git clone https://github.com/username/ai-web-builder.git
 
 Stepb 3: Open folder
 
-cd ai-web-builder
+cd ai-web-builde
 
 Steps 4: Run installer
 bash install.sh
